@@ -20,7 +20,7 @@ Every release is built and tested automatically on Windows and Linux, .NET 8 and
 
 **Problem:** manual or rule-only visual inspection is slow and hard to keep consistent.
 **For:** machine builders and integrators who need shape matching and defect detection inside their own C# / VB.NET software. Every NG result reports the reason, measured value, threshold and location.
-**Track record:** OpenCV-based inspection at 40,000 UPH, with a pass/fail decision in under 90 ms per unit.
+**Track record:** OpenCV-based inspection at 40,000 UPH, with a pass/fail decision in under 90 ms per unit (actual throughput depends on the line, optics and part).
 
 ## Tested on
 
@@ -39,4 +39,4 @@ The badge above shows the latest automated run. SDK source code is private; this
 
 ## 繁體中文摘要
 
-LeoSoft 提供 .NET 工業 SDK：GEM200、GEM300（SECS/GEM 設備通訊）與 AI-AOI（影像檢測）。GEM200 已在多家半導體封測廠實測；AI-AOI 檢測達 40,000 UPH、每顆 90 ms 內判定。每次發行都在 Windows／Linux、.NET 8／.NET 10 自動測試，本倉庫只公開測試結果，不含原始碼。詢價與 30 天試用：leosoft.tw@gmail.com、LINE @076cbubi。
+LeoSoft 提供 .NET 工業 SDK：GEM200、GEM300（SECS/GEM 設備通訊）與 AI-AOI（影像檢測）。GEM200 已在多家半導體封測廠實測；AI-AOI 檢測達 40,000 UPH、每顆 90 ms 內判定（實際產能依產線、光學與料件而定）。每次發行都在 Windows／Linux、.NET 8／.NET 10 自動測試，本倉庫只公開測試結果，不含原始碼。詢價與 30 天試用：leosoft.tw@gmail.com、LINE @076cbubi。
