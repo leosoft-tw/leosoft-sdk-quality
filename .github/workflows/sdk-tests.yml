@@ -1,0 +1,120 @@
+name: SDK tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+        required: true
+        description: branch or commit
+  repository_dispatch:
+    types: [sdk-test]
+
+permissions: {}
+
+concurrency:
+  group: sdk-tests
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.repository_owner == 'leosoft-tw'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        tfm: [net8.0, net10.0]
+    env:
+      TFM: ${{ matrix.tfm }}
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      LEOSOFT_NO_AUTO_ACTIVATE: '1'
+
+    steps:
+      - name: Validate ref
+        id: ref
+        shell: bash
+        env:
+          REF: ${{ inputs.ref || github.event.client_payload.ref }}
+        run: |
+          export LC_ALL=C
+          if [[ ! "$REF" =~ ^[A-Za-z0-9._/-]{1,100}$ || "$REF" == *..* ]]; then
+            echo 'Invalid ref.' >&2
+            exit 1
+          fi
+          printf 'value=%s\n' "$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch public summary script
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          mkdir -p scripts
+          curl --fail --silent --show-error --retry 3 \
+            --output scripts/summarize.py \
+            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$WORKFLOW_SHA/scripts/summarize.py"
+
+      - name: Check out SDK source
+        uses: actions/checkout@__SHA_CHECKOUT__ # v4
+        with:
+          repository: ${{ secrets.PRIVATE_REPO }}
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          ref: ${{ steps.ref.outputs.value }}
+          path: src
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: actions/setup-dotnet@__SHA_SETUP_DOTNET__ # v4
+        with:
+          dotnet-version: 8.0.x
+          global-json-file: src/global.json
+
+      - uses: actions/setup-python@__SHA_SETUP_PYTHON__ # v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Linux prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get install -y -qq tesseract-ocr poppler-utils >/dev/null
+          printf 'AOI_TEST_PYTHON=%s\n' "$(command -v python)" >> "$GITHUB_ENV"
+
+      - name: Set up Windows prerequisites
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install -q numpy==2.5.4 Pillow==13.0.0 > $null 2>&1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          choco install tesseract --yes --no-progress --limit-output > $null 2>&1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "LEOSOFT_TESSERACT=$env:ProgramFiles\Tesseract-OCR\tesseract.exe" >> $env:GITHUB_ENV
+          "AOI_TEST_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
+
+      - name: Build and test SDK
+        shell: bash
+        env:
+          TEST_PROJECT: ${{ secrets.TEST_PROJECT }}
+        run: |
+          rc=1
+          if [[ -n "$TEST_PROJECT" ]]; then
+            # Apply the SDK pin when the .NET CLI starts from the workspace root.
+            cp src/global.json global.json
+            rc=0
+            dotnet test "src/$TEST_PROJECT" -c Release -f "$TFM" -p:LeoSoftLicenseChannel=Test --nologo --verbosity quiet --logger "trx;LogFileName=r.trx" --results-directory "$RUNNER_TEMP/r" > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
+          fi
+          summary_rc=0
+          result=$(python scripts/summarize.py "$RUNNER_TEMP/r") || summary_rc=$?
+          result=${result%$'\r'}
+          printf '%s\n' "$result"
+          printf '%s\n' "$result" >> "$GITHUB_STEP_SUMMARY"
+          if (( rc != 0 || summary_rc != 0 )); then
+            exit 1
+          fi
+
+      - name: Clean up
+        if: always()
+        shell: bash
+        run: rm -rf -- "$RUNNER_TEMP/r" "$RUNNER_TEMP/test.log" src global.json
