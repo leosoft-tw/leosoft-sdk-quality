@@ -1,38 +1,42 @@
-# LeoSoft SDK Quality
+# LeoSoft Industrial SDKs for .NET
 
-Industrial .NET SDKs for equipment communication and vision inspection.
+[![SDK tests](https://github.com/leosoft-tw/leosoft-sdk-quality/actions/workflows/sdk-tests.yml/badge.svg)](https://github.com/leosoft-tw/leosoft-sdk-quality/actions/workflows/sdk-tests.yml)
 
-![SDK tests](https://github.com/leosoft-tw/leosoft-sdk-quality/actions/workflows/sdk-tests.yml/badge.svg)
+LeoSoft builds ready-to-integrate .NET SDKs for semiconductor and factory equipment makers.
+Every release is built and tested automatically on Windows and Linux, .NET 8 and .NET 10.
 
-## About LeoSoft
+## GEM200 SDK — SECS/GEM for equipment
 
-LeoSoft builds industrial software SDKs for .NET. Its SDKs cover SECS/GEM equipment communication (GEM200 / GEM300) and AI-AOI vision inspection.
+**Problem:** your machine must talk to the factory host over SECS/GEM (HSMS) before it can ship, and writing that layer from scratch takes months.
+**For:** equipment makers and automation engineers adding SECS/GEM to new or existing machines.
+**Track record:** field-tested with factory hosts at multiple semiconductor packaging & test facilities.
 
-## Track record
+## GEM300 SDK — 300 mm automation
 
-- GEM200 field-tested at multiple semiconductor packaging and test facilities.
-- AI-AOI OpenCV inspection at 40,000 UPH with a pass/fail decision within 90 ms per unit.
+**Problem:** 300 mm fabs require the GEM300 standards on top of basic GEM.
+**For:** equipment makers selling into 300 mm production lines. Includes everything in GEM200.
+
+## AI-AOI SDK — vision inspection
+
+**Problem:** manual or rule-only visual inspection is slow and hard to keep consistent.
+**For:** machine builders and integrators who need shape matching and defect detection inside their own C# / VB.NET software. Every NG result reports the reason, measured value, threshold and location.
+**Track record:** OpenCV-based inspection at 40,000 UPH, with a pass/fail decision in under 90 ms per unit.
 
 ## Tested on
 
-| Framework | Windows | Linux |
-| --- | --- | --- |
-| .NET 8 | ✓ | ✓ |
-| .NET 10 | ✓ | ✓ |
+| | Windows | Linux |
+|---|---|---|
+| .NET 8 | ✅ | ✅ |
+| .NET 10 | ✅ | ✅ |
 
-## What this repository is
+The badge above shows the latest automated run. SDK source code is private; this repository only shows pass/fail results.
 
-This public repository runs automated builds and tests of the private LeoSoft SDKs. The source code stays private, and only aggregate test counts are shown.
+## Quotes & 30-day trial
 
-## Links
-
-- [Website](https://leosoft-hub.pages.dev)
-- [SECS/GEM](https://leosoft-secs-gem.pages.dev)
-- [AI-AOI](https://leosoft-ai-aoi.pages.dev)
+- Email: [leosoft.tw@gmail.com](mailto:leosoft.tw@gmail.com)
+- LINE: [@076cbubi](https://line.me/R/ti/p/@076cbubi)
+- Website: [leosoft-hub.pages.dev](https://leosoft-hub.pages.dev) · [SECS/GEM](https://leosoft-secs-gem.pages.dev) · [AI-AOI](https://leosoft-ai-aoi.pages.dev)
 
 ## 繁體中文摘要
 
-LeoSoft 開發工業用 .NET SDK，涵蓋 SECS/GEM（GEM200／GEM300）設備通訊與 AI-AOI 視覺檢測。\
-GEM200 已在多家半導體封裝測試廠實地驗證。AI-AOI 採用 OpenCV，每小時可檢測 40,000 件，單件於 90 毫秒內判定是否合格。\
-本倉庫僅公開整體測試計數（含通過與失敗數），原始碼維持私有。\
-[LeoSoft 官網](https://leosoft-hub.pages.dev)
+LeoSoft 提供 .NET 工業 SDK：GEM200、GEM300（SECS/GEM 設備通訊）與 AI-AOI（影像檢測）。GEM200 已在多家半導體封測廠實測；AI-AOI 檢測達 40,000 UPH、每顆 90 ms 內判定。每次發行都在 Windows／Linux、.NET 8／.NET 10 自動測試，本倉庫只公開測試結果，不含原始碼。詢價與 30 天試用：leosoft.tw@gmail.com、LINE @076cbubi。
