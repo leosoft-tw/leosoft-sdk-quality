@@ -286,7 +286,10 @@ jobs:
             done
           else
             result=$(python scripts/summarize.py "$RUNNER_TEMP/r") || true
-            printf '%s\n' "${result:-RESULT os=unknown tfm=$TFM build=failed}"
+            # Do not put a literal RESULT line in this workflow file; Actions logs echo the script.
+            result=${result%$'\r'}
+            printf '%s\n' "$result"
+            printf '%s\n' "$result" >> "$GITHUB_STEP_SUMMARY"
             job_rc=1
           fi
           exit "$job_rc"

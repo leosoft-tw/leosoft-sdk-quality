@@ -56,6 +56,10 @@ def self_test():
         assert output.getvalue() == (
             "RESULT os=Linux tfm=net8.0 total=8 passed=4 failed=2 skipped=2\n"
         )
+    workflow = Path(__file__).resolve().parents[1] / ".github/workflows/sdk-tests.yml"
+    assert "RESULT os=" not in workflow.read_text(), (
+        "do not put a RESULT os= literal in the workflow; Actions logs echo the script"
+    )
 
 
 def main():
