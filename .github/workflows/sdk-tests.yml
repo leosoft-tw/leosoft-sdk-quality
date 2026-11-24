@@ -256,11 +256,12 @@ jobs:
             exit 1
           fi
           filter=()
-          case "${SUBSET:-all}" in
-            all) ;;
-            ocr) filter=(--filter 'FullyQualifiedName~MarkingOcr') ;;
-            *) echo 'Invalid subset.' >&2; exit 1 ;;
-          esac
+          python scripts/subset.py
+          args="$RUNNER_TEMP/subset.args"
+          if [[ -f "$args" ]]; then
+            mapfile -t filter < "$args"
+            rm -f -- "$args"
+          fi
           rc=1
           job_rc=0
           if [[ -n "$TEST_PROJECT" ]]; then
@@ -293,4 +294,4 @@ jobs:
       - name: Clean up
         if: always()
         shell: bash
-        run: rm -rf -- "$RUNNER_TEMP/r" "$RUNNER_TEMP/test.log" "$RUNNER_TEMP/k" "$RUNNER_TEMP/kh" src global.json
+        run: rm -rf -- "$RUNNER_TEMP/r" "$RUNNER_TEMP/test.log" "$RUNNER_TEMP/k" "$RUNNER_TEMP/kh" "$RUNNER_TEMP/subset.args" src global.json
