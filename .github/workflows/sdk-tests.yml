@@ -189,21 +189,53 @@ jobs:
             }
             return $null
           }
-          $exe = $null
-          $data = $null
-          $deadline = (Get-Date).AddSeconds(60)
-          do {
+          $pkg = 'C:\ProgramData\chocolatey\lib\tesseract'
+          $bin = 'C:\ProgramData\chocolatey\bin\tesseract.exe'
+          function Resolve-Engine {
             $exe = Find-TesseractExe
             $data = Find-Tessdata $exe
-            if ($exe -and $data) { break }
-            Start-Sleep -Seconds 2
-          } while ((Get-Date) -lt $deadline)
+            return $exe, $data
+          }
+          $exe, $data = Resolve-Engine
+          if (-not $exe -or -not $data) {
+            $setup = $null
+            if (Test-Path -LiteralPath $pkg) {
+              $setup = Get-ChildItem -LiteralPath $pkg -Filter 'tesseract-ocr-w64-setup-*.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            $dest = Join-Path $env:ProgramFiles 'Tesseract-OCR'
+            $installerRc = 'skip'
+            if ($setup) {
+              $proc = Start-Process -FilePath $setup.FullName -ArgumentList @('/S', "/D=$dest") -Wait -PassThru
+              $installerRc = [string]$proc.ExitCode
+            }
+            Write-Output "SETUP package=$([int](Test-Path -LiteralPath $pkg)) bin=$([int](Test-Path -LiteralPath $bin)) bundled=$([int][bool]$setup) installer=$installerRc"
+            $deadline = (Get-Date).AddSeconds(45)
+            do {
+              $exe, $data = Resolve-Engine
+              if ($exe -and $data) { break }
+              Start-Sleep -Seconds 2
+            } while ((Get-Date) -lt $deadline)
+          } else {
+            Write-Output "SETUP package=$([int](Test-Path -LiteralPath $pkg)) bin=$([int](Test-Path -LiteralPath $bin)) bundled=0 installer=skip"
+          }
           if (-not $data) { $data = Find-Tessdata $exe }
           $exeOk = [int]([bool]$exe)
           $dataOk = [int]([bool]$data)
           $langOk = [int]($data -and (Test-Path -LiteralPath (Join-Path $data 'eng.traineddata')))
           $source = Get-EngineSource $exe
           Write-Output "ENGINE exe=$exeOk data=$dataOk lang=$langOk source=$source"
+          if ($exeOk -ne 1 -or $langOk -ne 1) {
+            $hint = 'other'
+            $blob = ''
+            if (Test-Path -LiteralPath $chocoLog) { $blob = ((Get-Content -LiteralPath $chocoLog -ErrorAction SilentlyContinue) -join ' ').ToLowerInvariant() }
+            if ($blob -match 'timeout') { $hint = 'timeout' }
+            elseif ($blob -match '404|not found') { $hint = 'notfound' }
+            elseif ($blob -match 'checksum') { $hint = 'checksum' }
+            elseif ($blob -match 'already') { $hint = 'already' }
+            elseif ($blob -match 'lock') { $hint = 'lock' }
+            elseif ($blob -match 'installed') { $hint = 'installed' }
+            Write-Output "SETUP choco_hint=$hint"
+          }
           if ($exe) { "LEOSOFT_TESSERACT=$exe" >> $env:GITHUB_ENV }
           if ($data) {
             "LEOSOFT_TESSDATA=$data" >> $env:GITHUB_ENV
