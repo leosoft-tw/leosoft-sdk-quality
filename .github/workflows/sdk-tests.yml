@@ -142,16 +142,6 @@ jobs:
           choco install tesseract --yes --no-progress --limit-output > $chocoLog 2>&1
           $chocoRc = $LASTEXITCODE
           Write-Output "SETUP pip=$pipRc choco=$chocoRc"
-          $root = Join-Path $env:ProgramFiles 'Tesseract-OCR'
-          $exe = Join-Path $root 'tesseract.exe'
-          $data = Join-Path $root 'tessdata'
-          $eng = Join-Path $data 'eng.traineddata'
-          $exeOk = [int](Test-Path -LiteralPath $exe)
-          $dataOk = [int](Test-Path -LiteralPath $data)
-          $langOk = [int](Test-Path -LiteralPath $eng)
-          "LEOSOFT_TESSERACT=$exe" >> $env:GITHUB_ENV
-          "AOI_TEST_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
-          Write-Output "ENGINE exe=$exeOk data=$dataOk lang=$langOk"
           if ($chocoRc -ne 0) {
             $hint = 'other'
             $blob = ''
@@ -163,7 +153,64 @@ jobs:
             elseif ($blob -match 'lock') { $hint = 'lock' }
             Write-Output "SETUP choco_hint=$hint"
           }
-          if ($pipRc -ne 0 -or $chocoRc -ne 0) { exit 1 }
+          $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+          if ($machinePath) { $env:Path = $machinePath + ';' + $env:Path }
+          function Get-EngineSource([string]$path) {
+            if (-not $path) { return 'missing' }
+            $low = $path.ToLowerInvariant()
+            $pf = [string]$env:ProgramFiles
+            $x86 = [string]${env:ProgramFiles(x86)}
+            if ($pf -and $low.StartsWith($pf.ToLowerInvariant() + '\') -and $low.EndsWith('\tesseract-ocr\tesseract.exe')) { return 'programfiles' }
+            if ($x86 -and $low.StartsWith($x86.ToLowerInvariant() + '\') -and $low.EndsWith('\tesseract-ocr\tesseract.exe')) { return 'programfilesx86' }
+            if ($low.Contains('\chocolatey\')) { return 'chocolatey' }
+            return 'path'
+          }
+          function Find-TesseractExe {
+            $names = New-Object System.Collections.Generic.List[string]
+            if ($env:ProgramFiles) { $names.Add((Join-Path $env:ProgramFiles 'Tesseract-OCR\tesseract.exe')) }
+            $x86 = ${env:ProgramFiles(x86)}
+            if ($x86) { $names.Add((Join-Path $x86 'Tesseract-OCR\tesseract.exe')) }
+            $cmd = Get-Command tesseract -ErrorAction SilentlyContinue
+            if ($cmd -and $cmd.Source) { $names.Add([string]$cmd.Source) }
+            $lib = 'C:\ProgramData\chocolatey\lib\tesseract'
+            if (Test-Path -LiteralPath $lib) {
+              Get-ChildItem -LiteralPath $lib -Filter tesseract.exe -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $names.Add($_.FullName) }
+            }
+            foreach ($n in $names) {
+              if ($n -and (Test-Path -LiteralPath $n)) { return $n }
+            }
+            return $null
+          }
+          function Find-Tessdata([string]$exePath) {
+            if (-not $exePath) { return $null }
+            $dir = Split-Path -Parent $exePath
+            foreach ($d in @((Join-Path $dir 'tessdata'), (Join-Path (Split-Path -Parent $dir) 'tessdata'))) {
+              if (Test-Path -LiteralPath (Join-Path $d 'eng.traineddata')) { return $d }
+            }
+            return $null
+          }
+          $exe = $null
+          $data = $null
+          $deadline = (Get-Date).AddSeconds(60)
+          do {
+            $exe = Find-TesseractExe
+            $data = Find-Tessdata $exe
+            if ($exe -and $data) { break }
+            Start-Sleep -Seconds 2
+          } while ((Get-Date) -lt $deadline)
+          if (-not $data) { $data = Find-Tessdata $exe }
+          $exeOk = [int]([bool]$exe)
+          $dataOk = [int]([bool]$data)
+          $langOk = [int]($data -and (Test-Path -LiteralPath (Join-Path $data 'eng.traineddata')))
+          $source = Get-EngineSource $exe
+          Write-Output "ENGINE exe=$exeOk data=$dataOk lang=$langOk source=$source"
+          if ($exe) { "LEOSOFT_TESSERACT=$exe" >> $env:GITHUB_ENV }
+          if ($data) {
+            "LEOSOFT_TESSDATA=$data" >> $env:GITHUB_ENV
+            "TESSDATA_PREFIX=$data" >> $env:GITHUB_ENV
+          }
+          "AOI_TEST_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
+          if ($pipRc -ne 0 -or $chocoRc -ne 0 -or $exeOk -ne 1 -or $langOk -ne 1) { exit 1 }
 
       - name: Build and test SDK
         shell: bash
