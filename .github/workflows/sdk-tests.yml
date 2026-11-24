@@ -133,10 +133,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          python -m pip install -q numpy==2.5.4 Pillow==13.0.0 > $null 2>&1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          choco install tesseract --yes --no-progress --limit-output > $null 2>&1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $pipRc = 0
+          if ($env:SUBSET -ne 'ocr') {
+            python -m pip install -q numpy==2.5.4 Pillow==13.0.0 > $null 2>&1
+            $pipRc = $LASTEXITCODE
+          }
+          $chocoLog = Join-Path $env:RUNNER_TEMP 'choco-tesseract.log'
+          choco install tesseract --yes --no-progress --limit-output > $chocoLog 2>&1
+          $chocoRc = $LASTEXITCODE
+          Write-Output "SETUP pip=$pipRc choco=$chocoRc"
           $root = Join-Path $env:ProgramFiles 'Tesseract-OCR'
           $exe = Join-Path $root 'tesseract.exe'
           $data = Join-Path $root 'tessdata'
@@ -147,6 +152,18 @@ jobs:
           "LEOSOFT_TESSERACT=$exe" >> $env:GITHUB_ENV
           "AOI_TEST_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
           Write-Output "ENGINE exe=$exeOk data=$dataOk lang=$langOk"
+          if ($chocoRc -ne 0) {
+            $hint = 'other'
+            $blob = ''
+            if (Test-Path -LiteralPath $chocoLog) { $blob = ((Get-Content -LiteralPath $chocoLog -ErrorAction SilentlyContinue) -join ' ').ToLowerInvariant() }
+            if ($blob -match 'timeout') { $hint = 'timeout' }
+            elseif ($blob -match '404|not found') { $hint = 'notfound' }
+            elseif ($blob -match 'checksum') { $hint = 'checksum' }
+            elseif ($blob -match 'already') { $hint = 'already' }
+            elseif ($blob -match 'lock') { $hint = 'lock' }
+            Write-Output "SETUP choco_hint=$hint"
+          }
+          if ($pipRc -ne 0 -or $chocoRc -ne 0) { exit 1 }
 
       - name: Build and test SDK
         shell: bash
