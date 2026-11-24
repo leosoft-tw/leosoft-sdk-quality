@@ -7,6 +7,28 @@ on:
         type: string
         required: true
         description: full 40-character commit SHA
+      subset:
+        type: choice
+        required: false
+        default: all
+        options:
+          - all
+          - ocr
+        description: test subset; logs still print counts only
+      os:
+        type: choice
+        required: false
+        default: all
+        options:
+          - all
+          - windows
+          - linux
+        description: runner operating system
+      repeat:
+        type: string
+        required: false
+        default: '1'
+        description: times to run tests in each job (counts only)
   repository_dispatch:
     types: [sdk-test]
 
@@ -27,13 +49,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: ${{ fromJSON(github.event.inputs.os == 'windows' && '["windows-latest"]' || (github.event.inputs.os == 'linux' && '["ubuntu-latest"]' || '["ubuntu-latest", "windows-latest"]')) }}
         tfm: [net8.0, net10.0]
     env:
       TFM: ${{ matrix.tfm }}
       DOTNET_NOLOGO: '1'
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       LEOSOFT_NO_AUTO_ACTIVATE: '1'
+      SUBSET: ${{ github.event.inputs.subset || 'all' }}
+      REPEAT: ${{ github.event.inputs.repeat || '1' }}
 
     steps:
       - name: Validate ref
@@ -96,6 +120,14 @@ jobs:
           sudo apt-get update -qq >/dev/null
           sudo apt-get install -y -qq tesseract-ocr poppler-utils >/dev/null
           printf 'AOI_TEST_PYTHON=%s\n' "$(command -v python)" >> "$GITHUB_ENV"
+          exe=$(command -v tesseract || true)
+          data=""
+          lang=0
+          if [[ -n "$exe" ]]; then
+            data=$(tesseract --print-parameters 2>/dev/null | awk -F'\t' '$1=="tessedit_tessdata_path"{print $2; exit}')
+          fi
+          if tesseract --list-langs 2>/dev/null | grep -qx eng; then lang=1; fi
+          printf 'ENGINE exe=%s data=%s lang=%s\n' "$([[ -n $exe ]] && echo 1 || echo 0)" "$([[ -n $data ]] && echo 1 || echo 0)" "$lang"
 
       - name: Set up Windows prerequisites
         if: runner.os == 'Windows'
@@ -105,29 +137,62 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           choco install tesseract --yes --no-progress --limit-output > $null 2>&1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          "LEOSOFT_TESSERACT=$env:ProgramFiles\Tesseract-OCR\tesseract.exe" >> $env:GITHUB_ENV
+          $root = Join-Path $env:ProgramFiles 'Tesseract-OCR'
+          $exe = Join-Path $root 'tesseract.exe'
+          $data = Join-Path $root 'tessdata'
+          $eng = Join-Path $data 'eng.traineddata'
+          $exeOk = [int](Test-Path -LiteralPath $exe)
+          $dataOk = [int](Test-Path -LiteralPath $data)
+          $langOk = [int](Test-Path -LiteralPath $eng)
+          "LEOSOFT_TESSERACT=$exe" >> $env:GITHUB_ENV
           "AOI_TEST_PYTHON=$((Get-Command python).Source)" >> $env:GITHUB_ENV
+          Write-Output "ENGINE exe=$exeOk data=$dataOk lang=$langOk"
 
       - name: Build and test SDK
         shell: bash
         env:
           TEST_PROJECT: ${{ secrets.TEST_PROJECT }}
         run: |
+          export LC_ALL=C
+          repeat="${REPEAT:-1}"
+          if [[ ! "$repeat" =~ ^[1-9][0-9]?$ ]] || (( repeat > 20 )); then
+            echo 'Invalid repeat.' >&2
+            exit 1
+          fi
+          filter=()
+          case "${SUBSET:-all}" in
+            all) ;;
+            ocr) filter=(--filter 'FullyQualifiedName~MarkingOcr') ;;
+            *) echo 'Invalid subset.' >&2; exit 1 ;;
+          esac
           rc=1
+          job_rc=0
           if [[ -n "$TEST_PROJECT" ]]; then
             # Apply the SDK pin when the .NET CLI starts from the workspace root.
             cp src/global.json global.json
-            rc=0
-            dotnet test "src/$TEST_PROJECT" -c Release -f "$TFM" -p:LeoSoftLicenseChannel=Test --nologo --verbosity quiet --logger "trx;LogFileName=r.trx" --results-directory "$RUNNER_TEMP/r" > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
+            for ((i=1; i<=repeat; i++)); do
+              rm -rf -- "$RUNNER_TEMP/r"
+              mkdir -p -- "$RUNNER_TEMP/r"
+              rc=0
+              dotnet test "src/$TEST_PROJECT" -c Release -f "$TFM" -p:LeoSoftLicenseChannel=Test --nologo --verbosity quiet --logger "trx;LogFileName=r.trx" --results-directory "$RUNNER_TEMP/r" "${filter[@]}" > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
+              summary_rc=0
+              result=$(python scripts/summarize.py "$RUNNER_TEMP/r") || summary_rc=$?
+              result=${result%$'\r'}
+              if (( repeat > 1 )); then
+                result="$result attempt=$i"
+              fi
+              printf '%s\n' "$result"
+              printf '%s\n' "$result" >> "$GITHUB_STEP_SUMMARY"
+              if (( rc != 0 || summary_rc != 0 )); then
+                job_rc=1
+              fi
+            done
+          else
+            result=$(python scripts/summarize.py "$RUNNER_TEMP/r") || true
+            printf '%s\n' "${result:-RESULT os=unknown tfm=$TFM build=failed}"
+            job_rc=1
           fi
-          summary_rc=0
-          result=$(python scripts/summarize.py "$RUNNER_TEMP/r") || summary_rc=$?
-          result=${result%$'\r'}
-          printf '%s\n' "$result"
-          printf '%s\n' "$result" >> "$GITHUB_STEP_SUMMARY"
-          if (( rc != 0 || summary_rc != 0 )); then
-            exit 1
-          fi
+          exit "$job_rc"
 
       - name: Clean up
         if: always()
