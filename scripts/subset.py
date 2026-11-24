@@ -23,7 +23,7 @@ def main() -> int:
     if args is None:
         print("Invalid subset.", file=sys.stderr)
         return 1
-    dest.write_text("\n".join(args) + "\n", encoding="ascii")
+    dest.write_text("\n".join(args) + "\n", encoding="ascii", newline="\n")
     return 0
 
 

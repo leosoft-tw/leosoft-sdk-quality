@@ -294,4 +294,4 @@ jobs:
       - name: Clean up
         if: always()
         shell: bash
-        run: rm -rf -- "$RUNNER_TEMP/r" "$RUNNER_TEMP/test.log" "$RUNNER_TEMP/k" "$RUNNER_TEMP/kh" "$RUNNER_TEMP/subset.args" src global.json
+        run: rm -rf -- "$RUNNER_TEMP/r" "$RUNNER_TEMP/test.log" "$RUNNER_TEMP/k" "$RUNNER_TEMP/kh" "$RUNNER_TEMP/subset.args" "$RUNNER_TEMP/choco-tesseract.log" src global.json
